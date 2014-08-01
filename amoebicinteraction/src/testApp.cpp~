@@ -1,0 +1,190 @@
+#include "testApp.h"
+
+
+//--------------------------------------------------------------
+void testApp::setup() {
+	kinect.setRegistration(true);
+
+	kinect.init();
+	//kinect.init(true); // shows infrared instead of RGB video image
+	//kinect.init(false, false); // disable video image (faster fps)
+
+	kinect.open();		// opens first available kinect
+	//kinect.open(1);	// open a kinect by id, starting with 0 (sorted by serial # lexicographically))
+	//kinect.open("A00362A08602047A");	// open a kinect using it's unique serial #
+
+	// print the intrinsic IR sensor values
+	if(kinect.isConnected()) {
+		ofLogNotice() << "sensor-emitter dist: " << kinect.getSensorEmitterDistance() << "cm";
+		ofLogNotice() << "sensor-camera dist:  " << kinect.getSensorCameraDistance() << "cm";
+		ofLogNotice() << "zero plane pixel size: " << kinect.getZeroPlanePixelSize() << "mm";
+		ofLogNotice() << "zero plane dist: " << kinect.getZeroPlaneDistance() << "mm";
+	}
+	NUM_FRAMES_TO_CAPTURE=5;
+
+
+	colorImg.allocate(kinect.width, kinect.height);
+	grayImage.allocate(kinect.width, kinect.height);
+	grayThreshNear.allocate(kinect.width, kinect.height);
+	grayThreshFar.allocate(kinect.width, kinect.height);
+
+    // use a capture depth of 50cm to 1m
+    kinect.setDepthClipping(500, 3000);
+	ofSetFrameRate(40);
+
+	// zero the tilt on startup
+//	angle = 0;
+//	kinect.setCameraTiltAngle(-75);
+
+	}
+
+//--------------------------------------------------------------
+void testApp::update() {
+
+	ofBackground(100, 100, 100);
+
+	kinect.update();
+
+	// there is a new frame and we are connected
+	if(kinect.isFrameNew()) {
+
+		// load grayscale depth image from the kinect source
+            grayImage.setFromPixels(kinect.getDepthPixels(), kinect.width, kinect.height);
+			/*grayThreshNear = grayImage;
+			grayThreshFar = grayImage;
+			grayThreshNear.threshold(nearThreshold, true);
+			grayThreshFar.threshold(farThreshold);
+			cvAnd(grayThreshNear.getCvImage(), grayThreshFar.getCvImage(), grayImage.getCvImage(), NULL);
+
+
+		// update the cv images
+		grayImage.flagImageChanged(); */
+
+		// find contours which are between the size of 20 pixels and 1/3 the w*h pixels.
+		// also, find holes is set to true so we will get interior contours as well....
+		contourFinder.findContours(grayImage, 10, (kinect.width*kinect.height)/2, 20, false);
+	}
+
+
+
+    if (isCapturing) {
+        exportDepthPixels();
+        numFramesRemainingToCapture--;
+        if (numFramesRemainingToCapture < 0) {
+            isCapturing = false;
+        }
+    }
+}
+
+//--------------------------------------------------------------
+void testApp::draw() {
+
+	ofSetColor(255, 255, 255);
+
+
+		// draw from the live kinect
+		kinect.drawDepth(10, 10, 400, 300);
+		kinect.draw(420, 10, 400, 300);
+
+		grayImage.draw(10, 320, 400, 300);
+		contourFinder.draw(10, 320, 400, 300);
+
+
+
+
+}
+
+
+void testApp::exportDepthPixels() {
+    ofPixels & pix = kinect.getDepthPixelsRef();
+   ofPixels &pix1=kinect.getPixelsRef();//grayImage.getPixelsRef();
+    ostringstream filename;
+    filename << "depthPixels" << numFramesRemainingToCapture << ".png";
+    ofSaveImage(pix, filename.str());
+    ostringstream anotherfilename;
+    anotherfilename <<"ContourImage"<<numFramesRemainingToCapture << ".png";
+    ofSaveImage(pix1,anotherfilename.str());	
+}
+
+//--------------------------------------------------------------
+void testApp::exit() {
+	//kinect.setCameraTiltAngle(0); // zero the tilt on exit
+	kinect.close();
+}
+
+//--------------------------------------------------------------
+void testApp::keyPressed (int key) {
+	switch (key) {
+        case 'w':
+			kinect.enableDepthNearValueWhite(!kinect.isDepthNearValueWhite());
+			break;
+
+		case 'o':
+			kinect.setCameraTiltAngle(angle); // go back to prev tilt
+			kinect.open();
+			break;
+
+		case 'c':
+			kinect.setCameraTiltAngle(0); // zero the tilt
+			kinect.close();
+			break;
+
+        case ' ':
+            isCapturing = true;
+            numFramesRemainingToCapture = NUM_FRAMES_TO_CAPTURE - 1; // zero-based counting
+//            numFramesRemainingToCapture=40;
+            break;
+
+		case '1':
+			kinect.setLed(ofxKinect::LED_GREEN);
+			break;
+
+		case '2':
+			kinect.setLed(ofxKinect::LED_YELLOW);
+			break;
+
+		case '3':
+			kinect.setLed(ofxKinect::LED_RED);
+			break;
+
+		case '4':
+			kinect.setLed(ofxKinect::LED_BLINK_GREEN);
+			break;
+
+		case '5':
+			kinect.setLed(ofxKinect::LED_BLINK_YELLOW_RED);
+			break;
+
+		case '0':
+			kinect.setLed(ofxKinect::LED_OFF);
+			break;
+
+		case OF_KEY_UP:
+			angle++;
+			if(angle>30) angle=30;
+			kinect.setCameraTiltAngle(angle);
+			break;
+
+		case OF_KEY_DOWN:
+			angle--;
+			if(angle<-30) angle=-30;
+			kinect.setCameraTiltAngle(angle);
+			break;
+	}
+}
+
+//--------------------------------------------------------------
+void testApp::mouseDragged(int x, int y, int button)
+{}
+
+//--------------------------------------------------------------
+void testApp::mousePressed(int x, int y, int button)
+{}
+
+//--------------------------------------------------------------
+void testApp::mouseReleased(int x, int y, int button)
+{}
+
+//--------------------------------------------------------------
+void testApp::windowResized(int w, int h)
+{}
